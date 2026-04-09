@@ -1,0 +1,23 @@
+--cpu Cortex-M3
+"motor_pwm_2\startup_stm32f103xb.o"
+"motor_pwm_2\main.o"
+"motor_pwm_2\stm32f1xx_it.o"
+"motor_pwm_2\stm32f1xx_hal_msp.o"
+"motor_pwm_2\stm32f1xx_hal_gpio_ex.o"
+"motor_pwm_2\stm32f1xx_hal_tim.o"
+"motor_pwm_2\stm32f1xx_hal_tim_ex.o"
+"motor_pwm_2\stm32f1xx_hal.o"
+"motor_pwm_2\stm32f1xx_hal_rcc.o"
+"motor_pwm_2\stm32f1xx_hal_rcc_ex.o"
+"motor_pwm_2\stm32f1xx_hal_gpio.o"
+"motor_pwm_2\stm32f1xx_hal_dma.o"
+"motor_pwm_2\stm32f1xx_hal_cortex.o"
+"motor_pwm_2\stm32f1xx_hal_pwr.o"
+"motor_pwm_2\stm32f1xx_hal_flash.o"
+"motor_pwm_2\stm32f1xx_hal_flash_ex.o"
+"motor_pwm_2\stm32f1xx_hal_exti.o"
+"motor_pwm_2\system_stm32f1xx.o"
+--strict --scatter "motor_PWM_2\motor_PWM_2.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "motor_PWM_2.map" -o motor_PWM_2\motor_PWM_2.axf
