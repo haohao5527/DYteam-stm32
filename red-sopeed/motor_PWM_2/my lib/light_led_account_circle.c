@@ -1,5 +1,6 @@
 #include "light_led_account_circle.h"
 #include "red_reflection.h"
+#include "measure_circle.h"  // for MEASURE_CIRCLE()
 
 void LIGHT_LED_ACCOUNT_CIRCLE(void)
 {
