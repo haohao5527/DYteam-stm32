@@ -20,7 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f1xx_it.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "speed_sensor.h"
@@ -28,7 +27,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-
+extern SpeedSensor_HandleTypeDef hSpeedSensor;
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
@@ -57,7 +56,6 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern SpeedSensor_HandleTypeDef hSpeedSensor;
 
 /* USER CODE BEGIN EV */
 
@@ -204,7 +202,7 @@ void SysTick_Handler(void)
 /* USER CODE BEGIN 1 */
 
 /**
-  * @brief 外部中断10处理程序（PB10 - 红外测速传感器）
+  * @brief 外部中断10处理程序（PB10 - 红外测�?�传感器�??
   */
 void EXTI15_10_IRQHandler(void)
 {

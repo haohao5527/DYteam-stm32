@@ -29,6 +29,7 @@
 #include "tb6612.h"
 #include "ec11.h"
 #include "oled.h"
+#include "vl53l0x.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,12 +53,14 @@
 TB6612_HandleTypeDef hMotor;
 EC11_HandleTypeDef hEncoder;
 SpeedSensor_HandleTypeDef hSpeedSensor;
+VL53L0X_HandleTypeDef hLaser;
 
 int16_t motor_speed = 50;
-char speed_str[20];
-char speed_str_line2[20];
+char speed_str[20] = "PWM:50%";
+char speed_str_line2[20] = "Spd:0.0cm/s";
+char dist_str[20] = "Dist:INIT";
 
-/* 编码器调速参数 */
+/* 编码器调速参�? */
 #define ENCODER_SPEED_STEP    3
 /* USER CODE END PV */
 
@@ -72,7 +75,7 @@ static void App_Loop(void);
 /* USER CODE BEGIN 0 */
 
 /**
-  * @brief  硬件初始化（电机、编码器、测速传感器、OLED）
+  * @brief  硬件初始化（电机、编码器、测速传感器、OLED�?
   */
 static void Hardware_Init(void)
 {
@@ -96,10 +99,15 @@ static void Hardware_Init(void)
 
     /* 初始化红外测速传感器 */
     SpeedSensor_Init(&hSpeedSensor, GPIOB, GPIO_PIN_10);
+
+    /* 初始化激光测距传感器 */
+    if (VL53L0X_Init(&hLaser, &hi2c1) != HAL_OK) {
+        sprintf(dist_str, "Dist:FAIL");
+    }
 }
 
 /**
-  * @brief  应用主循环：编码器调速 + 测速 + OLED显示
+  * @brief  应用主循环：编码器调�? + 测�?? + OLED显示
   */
 static void App_Loop(void)
 {
@@ -119,6 +127,14 @@ static void App_Loop(void)
 
     SpeedSensor_Update(&hSpeedSensor);
 
+    if (VL53L0X_ReadDistance(&hLaser) == HAL_OK) {
+        if (VL53L0X_IsValid(&hLaser)) {
+            sprintf(dist_str, "Dist:%4dmm", VL53L0X_GetDistance(&hLaser));
+        } else {
+            sprintf(dist_str, "Dist:ERROR");
+        }
+    }
+
     OLED_NewFrame();
 
     OLED_DrawImage(0, 0, &pikaImg, OLED_COLOR_NORMAL);
@@ -129,6 +145,8 @@ static void App_Loop(void)
     speed_cm_s = SpeedSensor_GetFilteredSpeedCmS(&hSpeedSensor);
     sprintf(speed_str_line2, "Spd:%.1fcm/s", speed_cm_s);
     OLED_PrintASCIIString(0, 48, speed_str_line2, &afont8x6, OLED_COLOR_NORMAL);
+
+    OLED_PrintASCIIString(60, 48, dist_str, &afont8x6, OLED_COLOR_NORMAL);
 
     OLED_ShowFrame();
 
@@ -169,6 +187,7 @@ int main(void)
   MX_I2C1_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   Hardware_Init();
   /* USER CODE END 2 */
@@ -181,9 +200,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     App_Loop();
-    /* USER CODE END 3 */
   }
-  /* USER CODE END WHILE */
+  /* USER CODE END 3 */
 }
 
 /* USER CODE BEGIN 4 */
