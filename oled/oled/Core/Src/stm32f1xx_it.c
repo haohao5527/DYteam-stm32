@@ -27,7 +27,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-extern SpeedSensor_HandleTypeDef hSpeedSensor;
+extern SpeedSensor_DualHandleTypeDef hSpeedSensors;
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
@@ -202,7 +202,15 @@ void SysTick_Handler(void)
 /* USER CODE BEGIN 1 */
 
 /**
-  * @brief 外部中断10处理程序（PB10 - 红外测�?�传感器�??
+  * @brief 外部中断0处理程序（PA0 - 右轮光电门）
+  */
+void EXTI0_IRQHandler(void)
+{
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+}
+
+/**
+  * @brief 外部中断10-15处理程序（PB10 - 左轮光电门）
   */
 void EXTI15_10_IRQHandler(void)
 {
@@ -211,8 +219,10 @@ void EXTI15_10_IRQHandler(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if (GPIO_Pin == GPIO_PIN_10) {
-        SpeedSensor_IncrementPulse(&hSpeedSensor);
+    if (GPIO_Pin == GPIO_PIN_0) {
+        SpeedSensor_DualIncrementRight(&hSpeedSensors);
+    } else if (GPIO_Pin == GPIO_PIN_10) {
+        SpeedSensor_DualIncrementLeft(&hSpeedSensors);
     }
 }
 

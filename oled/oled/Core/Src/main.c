@@ -30,6 +30,7 @@
 #include "ec11.h"
 #include "oled.h"
 #include "vl53l0x.h"
+#include "ir_tracking.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,17 +51,20 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-TB6612_HandleTypeDef hMotor;
+TB6612_DualHandleTypeDef hMotors;
 EC11_HandleTypeDef hEncoder;
-SpeedSensor_HandleTypeDef hSpeedSensor;
+SpeedSensor_DualHandleTypeDef hSpeedSensors;
 VL53L0X_HandleTypeDef hLaser;
+OLED_HandleTypeDef hOLED;
+IR_TrackSensor_ArrayHandleTypeDef hTrackSensor;
 
-int16_t motor_speed = 50;
-char speed_str[20] = "PWM:50%";
+int16_t left_speed = 50;
+int16_t right_speed = 50;
+
+char speed_str[20] = "L:50% R:50%";
 char speed_str_line2[20] = "Spd:0.0cm/s";
 char dist_str[20] = "Dist:INIT";
 
-/* 编码器调速参�? */
 #define ENCODER_SPEED_STEP    3
 /* USER CODE END PV */
 
@@ -75,80 +79,104 @@ static void App_Loop(void);
 /* USER CODE BEGIN 0 */
 
 /**
-  * @brief  硬件初始化（电机、编码器、测速传感器、OLED�?
+  * @brief  硬件初始化（电机、编码器、测速传感器、OLED等）
   */
 static void Hardware_Init(void)
 {
-    /* 先初始化OLED，避免I2C总线冲突 */
     HAL_Delay(100);
-    OLED_Init();
+    OLED_Init(&hOLED, &hi2c1);
 
-    /* 再初始化电机 */
-    TB6612_Init(&hMotor,
-                GPIOB, GPIO_PIN_0,
-                GPIOB, GPIO_PIN_1,
-                &htim2, TIM_CHANNEL_1);
+    TB6612_DualInit(&hMotors,
+                    GPIOB, GPIO_PIN_0,   GPIOB, GPIO_PIN_1,   &htim2, TIM_CHANNEL_2,
+                    GPIOB, GPIO_PIN_2,   GPIOB, GPIO_PIN_3,   &htim2, TIM_CHANNEL_3);
 
-    TB6612_SetDirection(&hMotor, TB6612_DIR_FORWARD);
-    TB6612_Start(&hMotor);
-    TB6612_SetSpeed(&hMotor, 50);
+    TB6612_DualStart(&hMotors);
+    TB6612_DualSetSpeed(&hMotors, 50, 50);
 
-    /* 初始化编码器 */
     EC11_Init(&hEncoder, &htim1);
     EC11_Start(&hEncoder);
 
-    /* 初始化红外测速传感器 */
-    SpeedSensor_Init(&hSpeedSensor, GPIOB, GPIO_PIN_10);
+    SpeedSensor_DualInit(&hSpeedSensors,
+                         GPIOA, GPIO_PIN_0, EXTI0_IRQn,
+                         GPIOB, GPIO_PIN_10, EXTI15_10_IRQn);
 
-    /* 初始化激光测距传感器 */
-    if (VL53L0X_Init(&hLaser, &hi2c1) != HAL_OK) {
+    HAL_TIM_Base_Start(&htim4);
+
+    if (VL53L0X_Init(&hLaser, &hi2c1, GPIOB, GPIO_PIN_11) != HAL_OK) {
         sprintf(dist_str, "Dist:FAIL");
     }
+
+    IR_TrackSensor_ArrayInit(&hTrackSensor,
+                              GPIOB, GPIO_PIN_14,
+                              GPIOB, GPIO_PIN_12,
+                              GPIOB, GPIO_PIN_13);
 }
 
 /**
-  * @brief  应用主循环：编码器调�? + 测�?? + OLED显示
+  * @brief  应用主循环：编码器调速 + 测速 + OLED显示
   */
 static void App_Loop(void)
 {
     int16_t enc_delta = EC11_GetDelta(&hEncoder);
     int16_t speed_change;
-    float speed_cm_s;
+    float left_speed_cm_s;
+    float right_speed_cm_s;
 
     if (enc_delta != 0) {
         speed_change = enc_delta * ENCODER_SPEED_STEP;
-        motor_speed += speed_change;
+        left_speed += speed_change;
+        right_speed += speed_change;
 
-        if (motor_speed < 0)   motor_speed = 0;
-        if (motor_speed > 100) motor_speed = 100;
+        if (left_speed < 0)  left_speed = 0;
+        if (left_speed > 100) left_speed = 100;
+        if (right_speed < 0)  right_speed = 0;
+        if (right_speed > 100) right_speed = 100;
 
-        TB6612_SetSpeed(&hMotor, (uint8_t)motor_speed);
+        TB6612_DualSetSpeed(&hMotors, (int8_t)left_speed, (int8_t)right_speed);
     }
 
-    SpeedSensor_Update(&hSpeedSensor);
+    SpeedSensor_DualUpdate(&hSpeedSensors);
+
+    static uint16_t last_dist = 0;
+    uint16_t current_dist;
 
     if (VL53L0X_ReadDistance(&hLaser) == HAL_OK) {
         if (VL53L0X_IsValid(&hLaser)) {
-            sprintf(dist_str, "Dist:%4dmm", VL53L0X_GetDistance(&hLaser));
+            current_dist = VL53L0X_GetDistance(&hLaser);
+            last_dist = current_dist;
+            sprintf(dist_str, "Dist:%4d", current_dist);
         } else {
-            sprintf(dist_str, "Dist:ERROR");
+            if (last_dist != 0) {
+                sprintf(dist_str, "Dist:%4d*", last_dist);
+            }
         }
     }
 
-    OLED_NewFrame();
+    IR_TrackSensor_ArrayUpdate(&hTrackSensor);
+    uint8_t track_pattern = IR_TrackSensor_ArrayGetPattern(&hTrackSensor);
 
-    OLED_DrawImage(0, 0, &pikaImg, OLED_COLOR_NORMAL);
+    OLED_NewFrame(&hOLED);
 
-    sprintf(speed_str, "PWM:%3d%%", motor_speed);
-    OLED_PrintASCIIString(0, 40, speed_str, &afont8x6, OLED_COLOR_NORMAL);
+    OLED_PrintASCIIString(&hOLED, 0, 0, dist_str, &afont8x6, OLED_COLOR_NORMAL);
 
-    speed_cm_s = SpeedSensor_GetFilteredSpeedCmS(&hSpeedSensor);
-    sprintf(speed_str_line2, "Spd:%.1fcm/s", speed_cm_s);
-    OLED_PrintASCIIString(0, 48, speed_str_line2, &afont8x6, OLED_COLOR_NORMAL);
+    OLED_DrawLine(&hOLED, 63, 8, 63, 63, OLED_COLOR_NORMAL);
 
-    OLED_PrintASCIIString(60, 48, dist_str, &afont8x6, OLED_COLOR_NORMAL);
+    sprintf(speed_str, "L:%3d%%", left_speed);
+    OLED_PrintASCIIString(&hOLED, 0, 16, speed_str, &afont8x6, OLED_COLOR_NORMAL);
 
-    OLED_ShowFrame();
+    sprintf(speed_str, "R:%3d%%", right_speed);
+    OLED_PrintASCIIString(&hOLED, 70, 16, speed_str, &afont8x6, OLED_COLOR_NORMAL);
+
+    left_speed_cm_s = SpeedSensor_DualGetFilteredLeftSpeedCmS(&hSpeedSensors);
+    right_speed_cm_s = SpeedSensor_DualGetFilteredRightSpeedCmS(&hSpeedSensors);
+
+    sprintf(speed_str, "%.1fcm/s", left_speed_cm_s);
+    OLED_PrintASCIIString(&hOLED, 0, 26, speed_str, &afont8x6, OLED_COLOR_NORMAL);
+
+    sprintf(speed_str, "%.1fcm/s", right_speed_cm_s);
+    OLED_PrintASCIIString(&hOLED, 70, 26, speed_str, &afont8x6, OLED_COLOR_NORMAL);
+
+    OLED_ShowFrame(&hOLED);
 
     HAL_Delay(50);
 }
@@ -204,8 +232,6 @@ int main(void)
   /* USER CODE END 3 */
 }
 
-/* USER CODE BEGIN 4 */
-
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -245,6 +271,10 @@ void SystemClock_Config(void)
   }
 }
 
+/* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
 /**
   * @brief  This function is executed in case of error occurrence.
   * @retval None
@@ -259,8 +289,6 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-/* USER CODE END 4 */
 
 #ifdef  USE_FULL_ASSERT
 /**
