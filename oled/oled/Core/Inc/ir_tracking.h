@@ -4,7 +4,8 @@
 #include "main.h"
 #include "stm32f1xx_hal.h"
 
-#define IR_TRACKING_DEBOUNCE_MS    5
+#define IR_TRACKING_DEBOUNCE_MS    20
+#define IR_FILTER_SAMPLES          5
 
 typedef enum {
     IR_TRACK_LINE_NONE = 0,
@@ -18,6 +19,8 @@ typedef struct {
     IR_TrackStatusTypeDef lastStatus;
     uint32_t lastChangeTime;
     uint8_t isInitialized;
+    uint8_t filterBuffer[IR_FILTER_SAMPLES]; // 滑动滤波缓冲区
+    uint8_t filterIndex;                     // 缓冲索引
 } IR_TrackSensor_HandleTypeDef;
 
 typedef struct {

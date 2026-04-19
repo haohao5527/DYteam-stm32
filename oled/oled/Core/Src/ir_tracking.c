@@ -13,6 +13,10 @@ HAL_StatusTypeDef IR_TrackSensor_Init(IR_TrackSensor_HandleTypeDef* handle,
     handle->lastStatus = IR_TRACK_LINE_NONE;
     handle->lastChangeTime = 0;
     handle->isInitialized = 1;
+    handle->filterIndex = 0;
+    for (int i = 0; i < IR_FILTER_SAMPLES; i++) {
+        handle->filterBuffer[i] = 0;
+    }
 
     return HAL_OK;
 }
@@ -24,7 +28,25 @@ void IR_TrackSensor_Update(IR_TrackSensor_HandleTypeDef* handle)
     }
 
     GPIO_PinState state = HAL_GPIO_ReadPin(handle->sensorPort, handle->sensorPin);
-    IR_TrackStatusTypeDef newStatus = (state == GPIO_PIN_RESET) ? IR_TRACK_LINE_DETECTED : IR_TRACK_LINE_NONE;
+    uint8_t rawReading = (state == GPIO_PIN_RESET) ? 1 : 0; // 1表示检测到黑线
+
+    // 滑动窗口滤波
+    handle->filterBuffer[handle->filterIndex] = rawReading;
+    handle->filterIndex = (handle->filterIndex + 1) % IR_FILTER_SAMPLES;
+
+    // 统计有多少个1（检测到黑线的次数）
+    uint8_t count = 0;
+    for (int i = 0; i < IR_FILTER_SAMPLES; i++) {
+        count += handle->filterBuffer[i];
+    }
+
+    // 超过一半才算有效状态
+    IR_TrackStatusTypeDef newStatus;
+    if (count >= (IR_FILTER_SAMPLES + 1) / 2) {
+        newStatus = IR_TRACK_LINE_DETECTED;
+    } else {
+        newStatus = IR_TRACK_LINE_NONE;
+    }
 
     if (newStatus != handle->status) {
         uint32_t currentTime = HAL_GetTick();

@@ -101,7 +101,8 @@ int16_t EC11_GetDelta(EC11_HandleTypeDef* handle)
     int16_t delta = currentCount - handle->lastCount;
     handle->lastCount = currentCount;
 
-    return delta;
+    // TI12模式下，每格有4个脉冲，除以4更自然
+    return delta / 4;
 }
 
 int16_t EC11_GetCount(EC11_HandleTypeDef* handle)

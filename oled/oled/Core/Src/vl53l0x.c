@@ -66,29 +66,33 @@ HAL_StatusTypeDef VL53L0X_DeInit(VL53L0X_HandleTypeDef* handle)
     return HAL_OK;
 }
 
+static uint8_t measurementStarted = 0;
+
 HAL_StatusTypeDef VL53L0X_ReadDistance(VL53L0X_HandleTypeDef* handle)
 {
     VL53L0X_RangingMeasurementData_t ranging_data;
 
     if (handle == NULL) return HAL_ERROR;
 
-    VL53L0X_StartMeasurement(&handle->dev);
+    if (!measurementStarted) {
+        VL53L0X_StartMeasurement(&handle->dev);
+        measurementStarted = 1;
+    }
 
-    do {
-        HAL_Delay(10);
-        if (VL53L0X_GetRangingMeasurementData(&handle->dev, &ranging_data) == VL53L0X_ERROR_NONE) {
-            if (ranging_data.RangeStatus == 0) {
-                handle->distance_mm = ranging_data.RangeMilliMeter;
-                handle->is_valid = 1;
-            } else {
-                handle->is_valid = 0;
-            }
-            VL53L0X_ClearInterruptMask(&handle->dev, 0);
-            break;
+    if (VL53L0X_GetRangingMeasurementData(&handle->dev, &ranging_data) == VL53L0X_ERROR_NONE) {
+        if (ranging_data.RangeStatus == 0) {
+            handle->distance_mm = ranging_data.RangeMilliMeter;
+            handle->is_valid = 1;
+        } else {
+            handle->is_valid = 0;
         }
-    } while (1);
+        VL53L0X_ClearInterruptMask(&handle->dev, 0);
+        measurementStarted = 0;
+        return HAL_OK;
+    }
 
-    return HAL_OK;
+    // 如果还没准备好，直接返回，下次再试！不要阻塞！
+    return HAL_BUSY;
 }
 
 uint16_t VL53L0X_GetDistance(VL53L0X_HandleTypeDef* handle)
